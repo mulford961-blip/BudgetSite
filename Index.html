@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Budgeting App</title>
+  <!-- Basic styles to keep the UI clean and mobile-friendly -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    h1, h2 {
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .input-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .input-group label {
+      flex: 1 1 100px;
+      min-width: 80px;
+    }
+    .input-group input, .input-group select {
+      flex: 2 1 200px;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    .summary {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: space-around;
+      text-align: center;
+    }
+    .summary div {
+      flex: 1 1 150px;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .chart-container {
+      margin-top: 2rem;
+    }
+    @media (max-width: 600px) {
+      .input-group {
+        flex-direction: column;
+      }
+      .summary {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Personal Budgeting App</h1>
+
+  <!-- Section for setting monthly income -->
+  <h2>Set Monthly Income</h2>
+  <div class="input-group">
+    <label for="incomeInput">Monthly Income ($)</label>
+    <input type="number" id="incomeInput" min="0" step="0.01" placeholder="e.g., 3000">
+    <button class="btn" id="setIncomeBtn">Set Income</button>
+  </div>
+
+  <!-- Section for adding expenses -->
+  <h2>Add Expense</h2>
+  <div class="input-group">
+    <label for="expenseDesc">Description</label>
+    <input type="text" id="expenseDesc" placeholder="e.g., Rent">
+    <label for="expenseCategory">Category</label>
+    <select id="expenseCategory">
+      <option value="Rent">Rent</option>
+      <option value="Utilities">Utilities</option>
+      <option value="Groceries">Groceries</option>
+      <option value="Transportation">Transportation</option>
+      <option value="Entertainment">Entertainment</option>
+      <option value="Other">Other</option>
+    </select>
+    <label for="expenseAmount">Amount ($)</label>
+    <input type="number" id="expenseAmount" min="0" step="0.01" placeholder="e.g., 500">
+    <button class="btn" id="addExpenseBtn">Add Expense</button>
+  </div>
+
+  <!-- Table listing expenses -->
+  <table>
+    <thead>
+    <tr>
+      <th>Description</th>
+      <th>Category</th>
+      <th>Amount ($)</th>
+      <th>Date</th>
+    </tr>
+    </thead>
+    <tbody id="expenseTableBody">
+    <!-- Expenses will be dynamically inserted here -->
+    </tbody>
+  </table>
+
+  <!-- Summary section -->
+  <div class="summary">
+    <div>
+      <strong>Total Income:</strong>
+      <div id="totalIncome">$0.00</div>
+    </div>
+    <div>
+      <strong>Total Expenses:</strong>
+      <div id="totalExpenses">$0.00</div>
+    </div>
+    <div>
+      <strong>Remaining Budget:</strong>
+      <div id="remainingBudget">$0.00</div>
+    </div>
+  </div>
+
+  <!-- Chart container -->
+  <div class="chart-container">
+    <canvas id="expenseChart"></canvas>
+  </div>
+
+  <!-- Reset button -->
+  <div style="text-align:center; margin-top:1rem;">
+    <button class="btn" id="resetBtn">Reset Data</button>
+  </div>
+</div>
+
+<!-- Chart.js library via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // --- Logic and state management for the budgeting app ---
+
+  // Retrieve elements once at the top
+  const incomeInput = document.getElementById('incomeInput');
+  const setIncomeBtn = document.getElementById('setIncomeBtn');
+  const expenseDesc = document.getElementById('expenseDesc');
+  const expenseCategory = document.getElementById('expenseCategory');
+  const expenseAmount = document.getElementById('expenseAmount');
+  const addExpenseBtn = document.getElementById('addExpenseBtn');
+  const expenseTableBody = document.getElementById('expenseTableBody');
+  const totalIncomeElem = document.getElementById('totalIncome');
+  const totalExpensesElem = document.getElementById('totalExpenses');
+  const remainingBudgetElem = document.getElementById('remainingBudget');
+  const resetBtn = document.getElementById('resetBtn');
+  let expenseChart; // Chart.js instance
+
+  // Application state
+  let income = 0;
+  let expenses = []; // array of {desc, category, amount, date}
+
+  // Load saved data from localStorage on page load
+  function loadData() {
+    const savedIncome = localStorage.getItem('budgetIncome');
+    const savedExpenses = localStorage.getItem('budgetExpenses');
+    income = savedIncome ? parseFloat(savedIncome) : 0;
+    expenses = savedExpenses ? JSON.parse(savedExpenses) : [];
+    updateUI();
+  }
+
+  // Save current state to localStorage
+  function saveData() {
+    localStorage.setItem('budgetIncome', income.toString());
+    localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+  }
+
+  // Update the UI: income, expenses list, summary, chart
+  function updateUI() {
+    // Set income input value
+    incomeInput.value = income ? income.toString() : '';
+    // Populate expense table
+    expenseTableBody.innerHTML = '';
+    expenses.forEach(exp => {
+      const row = document.createElement('tr');
+      row.innerHTML = \`
+        <td>\${exp.desc}</td>
+        <td>\${exp.category}</td>
+        <td>$\${exp.amount.toFixed(2)}</td>
+        <td>\${exp.date}</td>
+      \`;
+      expenseTableBody.appendChild(row);
+    });
+    // Calculate totals
+    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const remaining = income - totalExpenses;
+    // Update summary values
+    totalIncomeElem.textContent = '$' + income.toFixed(2);
+    totalExpensesElem.textContent = '$' + totalExpenses.toFixed(2);
+    remainingBudgetElem.textContent = '$' + remaining.toFixed(2);
+    // Update chart
+    updateChart();
+  }
+
+  // Handle setting the monthly income
+  setIncomeBtn.addEventListener('click', () => {
+    const value = parseFloat(incomeInput.value);
+    if (isNaN(value) || value < 0) {
+      alert('Please enter a valid non-negative income.');
+      return;
+    }
+    income = value;
+    saveData();
+    updateUI();
+  });
+
+  // Handle adding a new expense
+  addExpenseBtn.addEventListener('click', () => {
+    const desc = expenseDesc.value.trim();
+    const category = expenseCategory.value;
+    const amount = parseFloat(expenseAmount.value);
+    if (!desc) {
+      alert('Please enter a description.');
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid positive amount.');
+      return;
+    }
+    // Create expense object
+    const expense = {
+      desc: desc,
+      category: category,
+      amount: amount,
+      date: new Date().toLocaleDateString()
+    };
+    expenses.push(expense);
+    // Clear form fields
+    expenseDesc.value = '';
+    expenseAmount.value = '';
+    // Persist and update UI
+    saveData();
+    updateUI();
+  });
+
+  // Reset data: clear income and expenses and localStorage
+  resetBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to reset all data?')) {
+      income = 0;
+      expenses = [];
+      saveData();
+      updateUI();
+    }
+  });
+
+  // Chart.js: draw or update the pie chart
+  function updateChart() {
+    // Aggregate expenses by category
+    const totalsByCategory = {};
+    expenses.forEach(exp => {
+      totalsByCategory[exp.category] = (totalsByCategory[exp.category] || 0) + exp.amount;
+    });
+    const labels = Object.keys(totalsByCategory);
+    const data = Object.values(totalsByCategory);
+    // If chart already exists, destroy it before creating a new one
+    if (expenseChart) {
+      expenseChart.destroy();
+    }
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    expenseChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data
+          // Colors are automatically assigned by Chart.js when none are specified
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'bottom'
+          },
+          title: {
+            display: true,
+            text: 'Expenses by Category'
+          }
+        }
+      }
+    });
+  }
+
+  // Initialize on page load
+  window.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
