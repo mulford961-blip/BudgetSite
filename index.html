@@ -6,8 +6,11 @@
   <title>Personal Budgeting App</title>
   <!-- Basic styles to keep the UI clean and mobile-friendly -->
   <style>
+    :root {
+      color-scheme: light;
+    }
     body {
-      font-family: Arial, sans-serif;
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
       margin: 0;
       padding: 1rem;
       background-color: #f5f5f5;
@@ -21,9 +24,19 @@
       max-width: 800px;
       margin: auto;
       background: #fff;
-      padding: 1rem;
-      border-radius: 4px;
+      padding: 1.5rem;
+      border-radius: 10px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .header p {
+      margin: 0.5rem auto 0;
+      max-width: 520px;
+      color: #555;
+      line-height: 1.4;
     }
     .input-group {
       display: flex;
@@ -48,9 +61,19 @@
       background-color: #007bff;
       color: white;
       cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
     }
     .btn:hover {
       background-color: #0056b3;
+      box-shadow: 0 4px 12px rgba(0, 91, 187, 0.2);
+      transform: translateY(-1px);
+    }
+    .btn.secondary {
+      background-color: #6c757d;
+    }
+    .btn.secondary:hover {
+      background-color: #545b62;
+      box-shadow: 0 4px 12px rgba(84, 91, 98, 0.2);
     }
     table {
       width: 100%;
@@ -61,6 +84,11 @@
       padding: 0.5rem;
       text-align: left;
       border-bottom: 1px solid #ddd;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 1rem;
+      color: #666;
     }
     .summary {
       margin-top: 1rem;
@@ -75,6 +103,35 @@
       padding: 0.5rem;
       border: 1px solid #ccc;
       border-radius: 4px;
+    }
+    .summary div span {
+      display: block;
+      font-size: 1.2rem;
+      margin-top: 0.25rem;
+    }
+    .summary .overspent span {
+      color: #b00020;
+    }
+    .category-breakdown {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid #e5e5e5;
+      background: #fafafa;
+    }
+    .category-breakdown ul {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+    }
+    .category-breakdown li {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.35rem 0;
+      border-bottom: 1px dashed #ddd;
+    }
+    .category-breakdown li:last-child {
+      border-bottom: none;
     }
     .chart-container {
       margin-top: 2rem;
@@ -91,7 +148,10 @@
 </head>
 <body>
 <div class="container">
-  <h1>Personal Budgeting App</h1>
+  <div class="header">
+    <h1>Personal Budgeting App</h1>
+    <p>Track income, log expenses, and see where your money goes each month. Your data stays in your browser.</p>
+  </div>
 
   <!-- Section for setting monthly income -->
   <h2>Set Monthly Income</h2>
@@ -134,21 +194,27 @@
     <!-- Expenses will be dynamically inserted here -->
     </tbody>
   </table>
+  <div id="emptyState" class="empty-state">No expenses yet. Add your first expense to start tracking.</div>
 
   <!-- Summary section -->
   <div class="summary">
     <div>
       <strong>Total Income:</strong>
-      <div id="totalIncome">$0.00</div>
+      <span id="totalIncome">$0.00</span>
     </div>
     <div>
       <strong>Total Expenses:</strong>
-      <div id="totalExpenses">$0.00</div>
+      <span id="totalExpenses">$0.00</span>
     </div>
-    <div>
+    <div id="remainingCard">
       <strong>Remaining Budget:</strong>
-      <div id="remainingBudget">$0.00</div>
+      <span id="remainingBudget">$0.00</span>
     </div>
+  </div>
+
+  <div class="category-breakdown">
+    <strong>Category Breakdown</strong>
+    <ul id="categoryList"></ul>
   </div>
 
   <!-- Chart container -->
@@ -158,7 +224,7 @@
 
   <!-- Reset button -->
   <div style="text-align:center; margin-top:1rem;">
-    <button class="btn" id="resetBtn">Reset Data</button>
+    <button class="btn secondary" id="resetBtn">Reset Data</button>
   </div>
 </div>
 
@@ -175,9 +241,12 @@
   const expenseAmount = document.getElementById('expenseAmount');
   const addExpenseBtn = document.getElementById('addExpenseBtn');
   const expenseTableBody = document.getElementById('expenseTableBody');
+  const emptyState = document.getElementById('emptyState');
   const totalIncomeElem = document.getElementById('totalIncome');
   const totalExpensesElem = document.getElementById('totalExpenses');
   const remainingBudgetElem = document.getElementById('remainingBudget');
+  const remainingCard = document.getElementById('remainingCard');
+  const categoryList = document.getElementById('categoryList');
   const resetBtn = document.getElementById('resetBtn');
   let expenseChart; // Chart.js instance
 
@@ -206,23 +275,26 @@
     incomeInput.value = income ? income.toString() : '';
     // Populate expense table
     expenseTableBody.innerHTML = '';
+    emptyState.style.display = expenses.length ? 'none' : 'block';
     expenses.forEach(exp => {
       const row = document.createElement('tr');
-      row.innerHTML = \`
-        <td>\${exp.desc}</td>
-        <td>\${exp.category}</td>
-        <td>$\${exp.amount.toFixed(2)}</td>
-        <td>\${exp.date}</td>
-      \`;
+      row.innerHTML = `
+        <td>${exp.desc}</td>
+        <td>${exp.category}</td>
+        <td>$${exp.amount.toFixed(2)}</td>
+        <td>${exp.date}</td>
+      `;
       expenseTableBody.appendChild(row);
     });
     // Calculate totals
     const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
     const remaining = income - totalExpenses;
     // Update summary values
-    totalIncomeElem.textContent = '$' + income.toFixed(2);
-    totalExpensesElem.textContent = '$' + totalExpenses.toFixed(2);
-    remainingBudgetElem.textContent = '$' + remaining.toFixed(2);
+    totalIncomeElem.textContent = formatCurrency(income);
+    totalExpensesElem.textContent = formatCurrency(totalExpenses);
+    remainingBudgetElem.textContent = formatCurrency(remaining);
+    remainingCard.classList.toggle('overspent', remaining < 0);
+    updateCategoryBreakdown();
     // Update chart
     updateChart();
   }
@@ -250,6 +322,10 @@
     }
     if (isNaN(amount) || amount <= 0) {
       alert('Please enter a valid positive amount.');
+      return;
+    }
+    if (income === 0) {
+      alert('Set your monthly income before adding expenses.');
       return;
     }
     // Create expense object
@@ -287,6 +363,12 @@
     });
     const labels = Object.keys(totalsByCategory);
     const data = Object.values(totalsByCategory);
+    if (!labels.length) {
+      if (expenseChart) {
+        expenseChart.destroy();
+      }
+      return;
+    }
     // If chart already exists, destroy it before creating a new one
     if (expenseChart) {
       expenseChart.destroy();
@@ -316,8 +398,39 @@
     });
   }
 
+  function updateCategoryBreakdown() {
+    categoryList.innerHTML = '';
+    if (!expenses.length) {
+      categoryList.innerHTML = '<li><span>No categories yet</span><span>$0.00</span></li>';
+      return;
+    }
+    const totalsByCategory = expenses.reduce((acc, exp) => {
+      acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+      return acc;
+    }, {});
+    Object.entries(totalsByCategory).forEach(([category, amount]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${category}</span><span>${formatCurrency(amount)}</span>`;
+      categoryList.appendChild(li);
+    });
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+  }
+
   // Initialize on page load
   window.addEventListener('DOMContentLoaded', loadData);
+  incomeInput.addEventListener('keypress', event => {
+    if (event.key === 'Enter') {
+      setIncomeBtn.click();
+    }
+  });
+  expenseAmount.addEventListener('keypress', event => {
+    if (event.key === 'Enter') {
+      addExpenseBtn.click();
+    }
+  });
 </script>
 </body>
 </html>
